@@ -1,15 +1,175 @@
 "use client";
-import { useSession, signIn, signOut } from "next-auth/react";
-export default function Component() {
-  const { data: session } = useSession();
-  if (session) {
-    return (<>
-        Signed in as {session.user.email} <br />
-        <button onClick={() => signOut()}>Sign out</button>
-    </>);
-  }
-  return (<>
-      Not signed in <br />
-      <button onClick={() => signIn()}>Sign in</button>
-  </>);
-}
+import { zodResolver } from "@hookform/resolvers/zod";
+import Link from "next/link";
+import { Form, useForm } from "react-hook-form";
+import { z } from "zod";
+import { useEffect, useState, type ChangeEvent } from "react";
+import { useDebounceValue } from "usehooks-ts";
+import { toast } from "sonner";
+import { useRouter } from "next/navigation";
+import { Loader2 } from "lucide-react";
+import { signInSchema } from "@/src/schemas/signInSchema";
+import axios, { AxiosError } from "axios";
+import { ApiResponse } from "@/src/types/ApiResponse";
+import {
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+const page = () => {
+  const [username, setUsername] = useState("");
+  const [usernameMessage, setUsernameMessage] = useState("");
+  const [isCheckingUsername, setIsCheckingUsername] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [debouncedUsername] = useDebounceValue(username, 300);
+  const router = useRouter();
+  const form = useForm<z.infer<typeof signInSchema>>({
+    resolver: zodResolver(signInSchema),
+    defaultValues: {
+      username: "",
+      email: "",
+      password: "",
+    },
+  });
+  useEffect(() => {
+    const checkUsernameUnique = async () => {
+      if (!debouncedUsername) {
+        setUsernameMessage("");
+        return;
+      }
+
+      setIsCheckingUsername(true);
+      setUsernameMessage("");
+      try {
+        const response = await axios.get(
+          `/api/check-username-unique?username=${debouncedUsername}`,
+        );
+        setUsernameMessage(response.data.message);
+      } catch (error) {
+        const axiosError = error as AxiosError<ApiResponse>;
+        setUsernameMessage(
+          axiosError.response?.data.message || "Error checking username",
+        );
+      } finally {
+        setIsCheckingUsername(false);
+      }
+    };
+
+    checkUsernameUnique();
+  }, [debouncedUsername]);
+
+  const onSubmit = async (data: z.infer<typeof signInSchema>) => {
+    setIsSubmitting(true);
+    try {
+      const response = await axios.post<ApiResponse>("/api/sign-in", data);
+      toast.success("Success", {
+        description: response.data.message,
+      });
+      router.replace(`/verify/${username}`);
+      setIsSubmitting(false);
+    } catch (error) {
+      console.error("error in sign-in", error);
+      const axiosError = error as AxiosError<ApiResponse>;
+      let errorMessage = axiosError.response?.data.message;
+      toast.error("Error", {
+        description: errorMessage || "An error occurred during sign-in.",
+      });
+      setIsSubmitting(false);
+    }
+  };
+  return (
+    <div className="flex justify-center items-center min-h-screen bg-gray-100">
+      <div className="w-full max-w-md p-8 space-y-8 bg-white rounded-lg shadow-md">
+        <div className="text-center">
+          <h1 className="text-4xl font-extrabold tracking-tight lg:text-5xl mb-6">
+            Join Mystery Message
+          </h1>
+          <p className="mb-4">Sign up start your anonymous adventure</p>
+        </div>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <FormField
+              control={form.control}
+              name="username"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Username</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="shadcdn"
+                      {...field}
+                      onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                        field.onChange(event);
+                        setUsername(event.target.value);
+                      }}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    This is your public display name.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="email"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Email</FormLabel>
+                  <FormControl>
+                    <Input placeholder="email" {...field} />
+                  </FormControl>
+                  <FormDescription>
+                    This is your public display name.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="password"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Password</FormLabel>
+                  <FormControl>
+                    <Input type="password" placeholder="password" {...field} />
+                  </FormControl>
+                  <FormDescription>
+                    This is your public display name.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? (
+                <>
+                  <Loader2>Creating your account...</Loader2>{" "}
+                </>
+              ) : (
+                "Sign In"
+              )}
+            </Button>
+          </form>
+        </Form>
+        <div className="text-center mt-4">
+          <p>
+            Already have an account?{" "}
+            <Link href="/sign-in" className="text-blue-600 hover:text-blue-800">
+              Sign In
+            </Link>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default page;
