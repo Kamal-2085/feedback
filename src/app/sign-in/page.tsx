@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Form, useForm } from "react-hook-form";
 import { z } from "zod";
 import { useEffect, useState, type ChangeEvent } from "react";
-import { useDebounceValue } from "usehooks-ts";
+import {  useDebounceCallback} from "usehooks-ts";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
@@ -21,12 +21,13 @@ import {
 } from "@/components/ui/form";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { set } from "mongoose";
 const page = () => {
   const [username, setUsername] = useState("");
   const [usernameMessage, setUsernameMessage] = useState("");
   const [isCheckingUsername, setIsCheckingUsername] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [debouncedUsername] = useDebounceValue(username, 300);
+  const debouncedUsername = useDebounceCallback(setUsername, 300);
   const router = useRouter();
   const form = useForm<z.infer<typeof signInSchema>>({
     resolver: zodResolver(signInSchema),
@@ -38,7 +39,7 @@ const page = () => {
   });
   useEffect(() => {
     const checkUsernameUnique = async () => {
-      if (!debouncedUsername) {
+      if (username) {
         setUsernameMessage("");
         return;
       }
@@ -61,7 +62,7 @@ const page = () => {
     };
 
     checkUsernameUnique();
-  }, [debouncedUsername]);
+  }, [username]);
 
   const onSubmit = async (data: z.infer<typeof signInSchema>) => {
     setIsSubmitting(true);
@@ -101,14 +102,16 @@ const page = () => {
                   <FormLabel>Username</FormLabel>
                   <FormControl>
                     <Input
-                      placeholder="shadcdn"
+                      placeholder="username"
                       {...field}
                       onChange={(event: ChangeEvent<HTMLInputElement>) => {
                         field.onChange(event);
-                        setUsername(event.target.value);
+                        debouncedUsername(event.target.value);
                       }}
                     />
                   </FormControl>
+                  {isCheckingUsername && <Loader2 className="animate-spin" />}
+                  <p className={`text-sm ${usernameMessage==="Username is unique"?'text-green-500':'text-red-500'}`}>test {usernameMessage}</p>
                   <FormDescription>
                     This is your public display name.
                   </FormDescription>
